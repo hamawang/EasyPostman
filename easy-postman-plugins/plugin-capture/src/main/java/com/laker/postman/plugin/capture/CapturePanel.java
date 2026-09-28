@@ -45,6 +45,7 @@ import javax.swing.ListSelectionModel;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.SwingWorker;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -147,7 +148,7 @@ public class CapturePanel extends JPanel {
     private boolean syncingQuickFilters;
     private boolean operationInProgress;
     private CaptureFlow selectedFlow;
-    private Timer refreshTimer;
+    private final CaptureRefreshScheduler refreshScheduler = new CaptureRefreshScheduler(this::refreshTable);
     private int totalFlowCount;
     private int visibleFlowCount;
     private volatile CaptureStatusSnapshot captureStatusSnapshot = checkingStatusSnapshot();
@@ -169,6 +170,12 @@ public class CapturePanel extends JPanel {
         refreshTable();
         updateStatus();
         refreshCaptureStatusAsync(false);
+        Timer proxyStatusTimer = new Timer(5_000, e -> {
+            if (proxyService.isRunning() && proxyService.syncSystemProxy()) {
+                updateCaptureStatusLabel();
+            }
+        });
+        proxyStatusTimer.start();
     }
 
     private void initUI() {
@@ -547,13 +554,7 @@ public class CapturePanel extends JPanel {
     }
 
     private void scheduleRefreshTable() {
-        SwingUtilities.invokeLater(() -> {
-            if (refreshTimer == null) {
-                refreshTimer = new Timer(120, e -> refreshTable());
-                refreshTimer.setRepeats(false);
-            }
-            refreshTimer.restart();
-        });
+        refreshScheduler.requestRefresh();
     }
 
     private void refreshTable() {
@@ -643,8 +644,7 @@ public class CapturePanel extends JPanel {
                 && CaptureFlowClassifier.isTelemetry(flow)) {
             return false;
         }
-        return !activeViewPresets.contains(CaptureViewPreset.API_ONLY)
-                || CaptureFlowClassifier.isApiTraffic(flow);
+        return true;
     }
 
     static boolean matchesSourceDisplayFilter(CaptureFlow flow, String includeSource, String excludeSource) {
@@ -1117,7 +1117,6 @@ public class CapturePanel extends JPanel {
         addQuickFilterButton(panel, "image", t(MessageKeys.TOOLBOX_CAPTURE_QUICK_FILTER_IMAGE));
         addQuickFilterButton(panel, "js", t(MessageKeys.TOOLBOX_CAPTURE_QUICK_FILTER_JS));
         addQuickFilterButton(panel, "css", t(MessageKeys.TOOLBOX_CAPTURE_QUICK_FILTER_CSS));
-        addQuickFilterButton(panel, "api", t(MessageKeys.TOOLBOX_CAPTURE_QUICK_FILTER_API));
         addQuickFilterButton(panel, "sse", t(MessageKeys.TOOLBOX_CAPTURE_QUICK_FILTER_SSE));
         addQuickFilterButton(panel, "websocket", t(MessageKeys.TOOLBOX_CAPTURE_QUICK_FILTER_WS));
         return panel;
@@ -1130,7 +1129,6 @@ public class CapturePanel extends JPanel {
         addViewPresetButton(panel, CaptureViewPreset.SLOW_ONLY, t(MessageKeys.TOOLBOX_CAPTURE_VIEW_FILTER_SLOW));
         addViewPresetButton(panel, CaptureViewPreset.HIDE_STATIC, t(MessageKeys.TOOLBOX_CAPTURE_VIEW_FILTER_HIDE_STATIC));
         addViewPresetButton(panel, CaptureViewPreset.HIDE_TELEMETRY, t(MessageKeys.TOOLBOX_CAPTURE_VIEW_FILTER_HIDE_TELEMETRY));
-        addViewPresetButton(panel, CaptureViewPreset.API_ONLY, t(MessageKeys.TOOLBOX_CAPTURE_VIEW_FILTER_API_ONLY));
         addViewPresetButton(panel, CaptureViewPreset.ERROR_PRIORITY, t(MessageKeys.TOOLBOX_CAPTURE_VIEW_FILTER_ERROR_PRIORITY));
         return panel;
     }
@@ -1324,6 +1322,9 @@ public class CapturePanel extends JPanel {
             return t(MessageKeys.TOOLBOX_CAPTURE_SYSTEM_PROXY_UNSUPPORTED);
         }
         if (proxyService.isSystemProxySynced()) {
+            if (!proxyService.isSystemProxyHealthy()) {
+                return t(MessageKeys.TOOLBOX_CAPTURE_SYSTEM_PROXY_LOST);
+            }
             return proxyService.systemProxyStatus();
         }
         if (!proxyService.isRunning() && syncSystemProxyCheckBox != null && syncSystemProxyCheckBox.isSelected()) {
@@ -1434,7 +1435,9 @@ public class CapturePanel extends JPanel {
             return ModernColors.getNeutral();
         }
         if (proxyService.isSystemProxySynced()) {
-            return ModernColors.getInfo();
+            return proxyService.isSystemProxyHealthy()
+                    ? ModernColors.getInfo()
+                    : ModernColors.getWarningDark();
         }
         if (!proxyService.isRunning() && syncSystemProxyCheckBox != null && syncSystemProxyCheckBox.isSelected()) {
             return ModernColors.getWarningDark();
@@ -2379,7 +2382,6 @@ public class CapturePanel extends JPanel {
             case SLOW_ONLY -> t(MessageKeys.TOOLBOX_CAPTURE_VIEW_FILTER_SLOW);
             case HIDE_STATIC -> t(MessageKeys.TOOLBOX_CAPTURE_VIEW_FILTER_HIDE_STATIC);
             case HIDE_TELEMETRY -> t(MessageKeys.TOOLBOX_CAPTURE_VIEW_FILTER_HIDE_TELEMETRY);
-            case API_ONLY -> t(MessageKeys.TOOLBOX_CAPTURE_VIEW_FILTER_API_ONLY);
             case ERROR_PRIORITY -> t(MessageKeys.TOOLBOX_CAPTURE_VIEW_FILTER_ERROR_PRIORITY);
         };
     }
@@ -2389,7 +2391,6 @@ public class CapturePanel extends JPanel {
         SLOW_ONLY,
         HIDE_STATIC,
         HIDE_TELEMETRY,
-        API_ONLY,
         ERROR_PRIORITY
     }
 
