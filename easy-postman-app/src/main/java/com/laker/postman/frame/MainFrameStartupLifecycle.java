@@ -9,13 +9,38 @@ import java.util.function.Consumer;
  * 管理主窗口启动期间的一次性事件和回调通知。
  */
 class MainFrameStartupLifecycle {
+    enum CloseAction {
+        NORMAL_EXIT,
+        WAIT_FOR_RUNTIME,
+        EXIT_BEFORE_CONTENT
+    }
+
     private boolean mainContentLoaded;
     private boolean mainContentLoadRequested;
+    private boolean runtimeReady;
+    private boolean startupCloseRequested;
     private Throwable mainContentLoadFailure;
     private boolean startupShellPainted;
     private final List<Runnable> mainContentLoadedCallbacks = new ArrayList<>();
     private final List<Consumer<Throwable>> mainContentLoadFailedCallbacks = new ArrayList<>();
     private final List<Runnable> startupShellPaintedCallbacks = new ArrayList<>();
+
+    synchronized CloseAction onCloseRequested() {
+        if (mainContentLoaded) {
+            return CloseAction.NORMAL_EXIT;
+        }
+        startupCloseRequested = true;
+        return runtimeReady ? CloseAction.EXIT_BEFORE_CONTENT : CloseAction.WAIT_FOR_RUNTIME;
+    }
+
+    synchronized boolean markRuntimeReady() {
+        runtimeReady = true;
+        return startupCloseRequested;
+    }
+
+    synchronized boolean isStartupCloseRequested() {
+        return startupCloseRequested;
+    }
 
     synchronized boolean markMainContentLoadRequested() {
         if (mainContentLoaded || mainContentLoadRequested) {

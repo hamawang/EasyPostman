@@ -151,6 +151,21 @@ public class MainFrame extends JFrame {
         startupLifecycle.whenStartupShellPainted(callback);
     }
 
+    /** 在 IOC 和插件初始化完成后调用；若启动窗口已被关闭，调用方应立即结束进程。 */
+    public boolean markStartupRuntimeReady() {
+        return startupLifecycle.markRuntimeReady();
+    }
+
+    public boolean isStartupCloseRequested() {
+        return startupLifecycle.isStartupCloseRequested();
+    }
+
+    public void exitBeforeMainContentReady() {
+        log.info("Exiting before main content was initialized");
+        dispose();
+        System.exit(0);
+    }
+
     private void initWindowCloseListener() {
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
@@ -159,7 +174,11 @@ public class MainFrame extends JFrame {
                 // 清理资源并保存状态
                 cleanup();
                 windowStateController.saveWindowState();
-                BeanFactory.getBean(AppExitCoordinator.class).exitApplication();
+                switch (startupLifecycle.onCloseRequested()) {
+                    case NORMAL_EXIT -> BeanFactory.getBean(AppExitCoordinator.class).exitApplication();
+                    case WAIT_FOR_RUNTIME -> setVisible(false);
+                    case EXIT_BEFORE_CONTENT -> exitBeforeMainContentReady();
+                }
             }
         });
     }

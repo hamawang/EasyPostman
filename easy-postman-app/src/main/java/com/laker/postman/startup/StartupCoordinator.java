@@ -173,6 +173,7 @@ public class StartupCoordinator {
         MainFrame mainFrame = UiSingletonFactory.getInstance(MainFrame.class);
         log.info("Initializing main frame components");
         mainFrame.initComponents();
+        mainFrame.markStartupRuntimeReady();
         log.info("Main frame components initialized");
         return mainFrame;
     }

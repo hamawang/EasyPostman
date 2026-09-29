@@ -29,8 +29,17 @@ class NoSplashStartupWorker extends SwingWorker<Void, Void> {
     @Override
     protected void done() {
         try {
-            get();
             MainFrame mainFrame = visibleMainFrame.join();
+            // 主窗口可能在后台初始化期间已被关闭；此时不要再弹启动错误或装载内容。
+            if (mainFrame.isStartupCloseRequested()) {
+                mainFrame.exitBeforeMainContentReady();
+                return;
+            }
+            get();
+            if (mainFrame.markStartupRuntimeReady()) {
+                mainFrame.exitBeforeMainContentReady();
+                return;
+            }
             long menuStartedAt = System.nanoTime();
             mainFrame.installMainMenu();
             log.info("GUI startup stage complete: main menu installed in {} ms",
