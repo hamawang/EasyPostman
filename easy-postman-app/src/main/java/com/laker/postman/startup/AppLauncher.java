@@ -2,6 +2,7 @@ package com.laker.postman.startup;
 
 import com.formdev.flatlaf.util.SystemInfo;
 import com.laker.postman.common.themes.SimpleThemeManager;
+import com.laker.postman.frame.MainFrame;
 import com.laker.postman.http.runtime.app.AppHttpRuntimeBootstrap;
 import com.laker.postman.ioc.BeanFactory;
 import com.laker.postman.platform.instance.SingleInstanceCoordinator;
@@ -13,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import javax.swing.*;
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
 import java.util.OptionalInt;
 
 /**
@@ -31,6 +33,7 @@ public class AppLauncher {
     }
 
     public int launch(String[] args) {
+        long launchStartedAt = System.nanoTime();
         configureBaseRuntimeEnvironment();
         registerShutdownHook();
         OptionalInt commandExitCode = new AppCommandRouter().route(args, System.out, System.err);
@@ -49,9 +52,13 @@ public class AppLauncher {
         if (singleInstanceExitCode.isPresent()) {
             return singleInstanceExitCode.getAsInt();
         }
-        // 先完成 Swing 平台配置，再把组件初始化切到 EDT，避免 UI 线程外创建组件。
+        // 先完成平台和主题配置，再把组件创建切到 EDT。
         configurePlatformWindowDecorations();
-        SwingUtilities.invokeLater(AppLauncher::startSwingApplication);
+        StartupCoordinator startupCoordinator = new StartupCoordinator(launchStartedAt);
+        startupCoordinator.startHostIocInitialization();
+        initializeLookAndFeel();
+        markStartupCheckpoint("look and feel initialized");
+        SwingUtilities.invokeLater(() -> startSwingApplication(startupCoordinator));
         return GUI_STARTED;
     }
 
@@ -102,13 +109,10 @@ public class AppLauncher {
         JDialog.setDefaultLookAndFeelDecorated(true);
     }
 
-    private void startSwingApplication() {
+    private void startSwingApplication(StartupCoordinator startupCoordinator) {
         markStartupCheckpoint("Swing EDT initialization started");
         log.info("Starting Swing application initialization on EDT");
-        // Swing 组件创建前先确定主题；主题初始化会同步恢复用户字体 defaults。
-        initializeLookAndFeel();
-        markStartupCheckpoint("look and feel initialized");
-        startMainFrame();
+        startMainFrame(startupCoordinator);
     }
 
     /**
@@ -120,8 +124,7 @@ public class AppLauncher {
         log.info("Application look and feel initialized");
     }
 
-    private void startMainFrame() {
-        StartupCoordinator startupCoordinator = new StartupCoordinator();
+    private void startMainFrame(StartupCoordinator startupCoordinator) {
         boolean splashEnabled = SettingManager.isStartupSplashEnabled();
         log.info("Starting main frame initialization: splashEnabled={}", splashEnabled);
         if (splashEnabled) {
@@ -129,8 +132,15 @@ public class AppLauncher {
             startWithSplash(startupCoordinator);
             return;
         }
-        // 无 Splash 模式仍使用后台线程准备主窗口，避免阻塞 EDT。
-        new NoSplashStartupWorker(startupCoordinator).execute();
+        // IOC 和插件在后台准备；EDT 同时创建并显示不依赖插件的窗口壳。
+        CompletableFuture<MainFrame> visibleMainFrame = new CompletableFuture<>();
+        new NoSplashStartupWorker(startupCoordinator, visibleMainFrame).execute();
+        try {
+            visibleMainFrame.complete(startupCoordinator.createAndShowMainFrameShellOnEdt());
+        } catch (RuntimeException | Error exception) {
+            visibleMainFrame.completeExceptionally(exception);
+            StartupFailureHandler.showStartupErrorAndExit(exception);
+        }
     }
 
     private void startWithSplash(StartupCoordinator startupCoordinator) {
