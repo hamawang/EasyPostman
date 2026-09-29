@@ -94,9 +94,9 @@ App.main()
        -> StartupCoordinator.startHostIocInitialization()  // background IOC scan and workspace state
        -> SimpleThemeManager.initTheme()  // launcher thread, before Swing components exist
        -> SwingUtilities.invokeLater()
-            -> SplashWindow or no-splash main-frame shell
+            -> SplashWindow or no-splash SwingWorker
             -> background worker waits for IOC, then initializes PluginRuntime
-            -> install the plugin-aware menu and main content on EDT
+            -> create MainFrame with its menu on EDT, show its shell, then load main content
 ```
 
 ---

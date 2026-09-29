@@ -41,14 +41,11 @@ public class MainFrame extends JFrame {
     }
 
     public void initComponents() {
-        installMainMenu();
+        setJMenuBar(UiSingletonFactory.getInstance(TopMenuBar.class));
         initStartupShell();
     }
 
-    /**
-     * 创建首帧所需的窗口内容。菜单依赖插件注册，可在窗口显示后安装。
-     */
-    public void initStartupShell() {
+    private void initStartupShell() {
         installStartupShell();
 
         // 设置最小窗口尺寸，防止窗口被拖得太小
@@ -74,13 +71,6 @@ public class MainFrame extends JFrame {
         }
         log.info("MainFrame component initialization completed: bounds={}, state={}",
                 getBounds(), getExtendedState());
-    }
-
-    public void installMainMenu() {
-        setJMenuBar(UiSingletonFactory.getInstance(TopMenuBar.class));
-        if (isVisible()) {
-            revalidate();
-        }
     }
 
     public void loadMainContentAsync() {
@@ -151,21 +141,6 @@ public class MainFrame extends JFrame {
         startupLifecycle.whenStartupShellPainted(callback);
     }
 
-    /** 在 IOC 和插件初始化完成后调用；若启动窗口已被关闭，调用方应立即结束进程。 */
-    public boolean markStartupRuntimeReady() {
-        return startupLifecycle.markRuntimeReady();
-    }
-
-    public boolean isStartupCloseRequested() {
-        return startupLifecycle.isStartupCloseRequested();
-    }
-
-    public void exitBeforeMainContentReady() {
-        log.info("Exiting before main content was initialized");
-        dispose();
-        System.exit(0);
-    }
-
     private void initWindowCloseListener() {
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
@@ -174,11 +149,7 @@ public class MainFrame extends JFrame {
                 // 清理资源并保存状态
                 cleanup();
                 windowStateController.saveWindowState();
-                switch (startupLifecycle.onCloseRequested()) {
-                    case NORMAL_EXIT -> BeanFactory.getBean(AppExitCoordinator.class).exitApplication();
-                    case WAIT_FOR_RUNTIME -> setVisible(false);
-                    case EXIT_BEFORE_CONTENT -> exitBeforeMainContentReady();
-                }
+                BeanFactory.getBean(AppExitCoordinator.class).exitApplication();
             }
         });
     }

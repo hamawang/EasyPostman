@@ -15,32 +15,6 @@ import static org.testng.Assert.assertTrue;
 public class MainFrameStartupLifecycleTest {
 
     @Test
-    public void shouldDeferCloseUntilRuntimeIsReadyBeforeContentLoads() {
-        MainFrameStartupLifecycle lifecycle = new MainFrameStartupLifecycle();
-
-        assertSame(lifecycle.onCloseRequested(), MainFrameStartupLifecycle.CloseAction.WAIT_FOR_RUNTIME);
-        assertTrue(lifecycle.isStartupCloseRequested());
-        assertTrue(lifecycle.markRuntimeReady());
-    }
-
-    @Test
-    public void shouldExitWithoutLoadingContentWhenRuntimeIsAlreadyReady() {
-        MainFrameStartupLifecycle lifecycle = new MainFrameStartupLifecycle();
-
-        assertFalse(lifecycle.markRuntimeReady());
-        assertSame(lifecycle.onCloseRequested(), MainFrameStartupLifecycle.CloseAction.EXIT_BEFORE_CONTENT);
-    }
-
-    @Test
-    public void shouldUseNormalExitAfterMainContentLoads() {
-        MainFrameStartupLifecycle lifecycle = new MainFrameStartupLifecycle();
-        lifecycle.markRuntimeReady();
-        lifecycle.markMainContentLoaded();
-
-        assertSame(lifecycle.onCloseRequested(), MainFrameStartupLifecycle.CloseAction.NORMAL_EXIT);
-    }
-
-    @Test
     public void shouldAllowMainContentLoadRequestOnlyOnce() {
         MainFrameStartupLifecycle lifecycle = new MainFrameStartupLifecycle();
 

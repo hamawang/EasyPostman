@@ -83,22 +83,6 @@ public class StartupCoordinator {
         return mainFrame;
     }
 
-    /** 在 EDT 上先显示不依赖插件的窗口壳。 */
-    public MainFrame createAndShowMainFrameShellOnEdt() {
-        if (!SwingUtilities.isEventDispatchThread()) {
-            throw new IllegalStateException("Main frame shell must be created on the EDT");
-        }
-        long startedAt = System.nanoTime();
-        AppLauncher.markStartupCheckpoint("creating main frame shell on EDT");
-        log.info("GUI startup stage: creating main frame shell on EDT");
-        MainFrame mainFrame = UiSingletonFactory.getInstance(MainFrame.class);
-        mainFrame.initStartupShell();
-        log.info("GUI startup stage complete: main frame shell initialized in {} ms",
-                (System.nanoTime() - startedAt) / 1_000_000);
-        showMainFrameOnEdt(mainFrame);
-        return mainFrame;
-    }
-
     public void showMainFrameAndLoadContent(MainFrame mainFrame) {
         if (mainFrame == null) {
             return;
@@ -173,7 +157,6 @@ public class StartupCoordinator {
         MainFrame mainFrame = UiSingletonFactory.getInstance(MainFrame.class);
         log.info("Initializing main frame components");
         mainFrame.initComponents();
-        mainFrame.markStartupRuntimeReady();
         log.info("Main frame components initialized");
         return mainFrame;
     }

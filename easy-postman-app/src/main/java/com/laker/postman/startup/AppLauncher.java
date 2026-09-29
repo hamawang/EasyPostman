@@ -2,7 +2,6 @@ package com.laker.postman.startup;
 
 import com.formdev.flatlaf.util.SystemInfo;
 import com.laker.postman.common.themes.SimpleThemeManager;
-import com.laker.postman.frame.MainFrame;
 import com.laker.postman.http.runtime.app.AppHttpRuntimeBootstrap;
 import com.laker.postman.ioc.BeanFactory;
 import com.laker.postman.platform.instance.SingleInstanceCoordinator;
@@ -14,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import javax.swing.*;
 import java.io.IOException;
-import java.util.concurrent.CompletableFuture;
 import java.util.OptionalInt;
 
 /**
@@ -132,15 +130,8 @@ public class AppLauncher {
             startWithSplash(startupCoordinator);
             return;
         }
-        // IOC 和插件在后台准备；EDT 同时创建并显示不依赖插件的窗口壳。
-        CompletableFuture<MainFrame> visibleMainFrame = new CompletableFuture<>();
-        new NoSplashStartupWorker(startupCoordinator, visibleMainFrame).execute();
-        try {
-            visibleMainFrame.complete(startupCoordinator.createAndShowMainFrameShellOnEdt());
-        } catch (RuntimeException | Error exception) {
-            visibleMainFrame.completeExceptionally(exception);
-            StartupFailureHandler.showStartupErrorAndExit(exception);
-        }
+        // IOC 与主题并行初始化；插件就绪后再创建并显示主窗口。
+        new NoSplashStartupWorker(startupCoordinator).execute();
     }
 
     private void startWithSplash(StartupCoordinator startupCoordinator) {
